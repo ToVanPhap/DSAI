@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DSA Visualizer - Trung Tâm Thử Thách</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Kiểu dáng tùy chỉnh cho trang quiz với các chế độ và giao diện -->
+    <style>
+        body { display: flex; flex-direction: column; min-height: 100vh; overflow: hidden; }
+        .main-container { flex: 1; padding: 20px 40px; display: flex; flex-direction: column; align-items: center; overflow: hidden; }
+        
+        .mode-selection { display: flex; gap: 30px; margin-top: 40px; width: 100%; max-width: 900px; justify-content: center; flex-wrap: wrap; }
+        .mode-card { flex: 1; min-width: 300px; background: var(--bg-panel); border: 2px solid transparent; border-radius: 15px; padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 10px 20px rgba(0,0,0,0.05); }
+        .mode-card:hover { transform: translateY(-5px); box-shadow: 0 15px 25px rgba(0,0,0,0.1); }
+        .mode-card.situ { border-bottom: 5px solid #3498db; }
+        .mode-card.situ:hover { border-color: #3498db; }
+        .mode-card.chienbinh { border-bottom: 5px solid #e74c3c; }
+        .mode-card.chienbinh:hover { border-color: #e74c3c; }
+        .mode-icon { font-size: 60px; margin-bottom: 15px; }
+        .mode-title { font-size: 24px; font-weight: bold; color: var(--text-main); margin-bottom: 10px; }
+        .mode-desc { color: #7f8c8d; font-size: 14px; line-height: 1.5; }
+
+        .mode-container { display: none; width: 100%; max-width: 900px; background: var(--bg-panel); border-radius: 12px; padding: 30px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); animation: fadeIn 0.4s ease; position: relative; max-height: 75vh; overflow-y: auto; }
+        .mode-container::-webkit-scrollbar { width: 8px; }
+        .mode-container::-webkit-scrollbar-track { background: var(--bg-main); border-radius: 8px; }
+        .mode-container::-webkit-scrollbar-thumb { background: #bdc3c7; border-radius: 8px; }
+        .mode-container::-webkit-scrollbar-thumb:hover { background: #95a5a6; }
+        body.dark-mode .mode-container::-webkit-scrollbar-thumb { background: #4b5363; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .mode-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 15px; margin-bottom: 25px; position: sticky; top: -30px; background: var(--bg-panel); z-index: 10; margin-top: -10px; padding-top: 10px; }
+        .mode-header h2 { margin: 0; display: flex; align-items: center; gap: 10px; color: var(--text-main); }
+        .btn-exit { background: transparent; border: 1px solid #7f8c8d; color: #7f8c8d; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 5px; transition: 0.2s; }
+        .btn-exit:hover { background: #e74c3c; color: white; border-color: #e74c3c; }
+
+        .question-card { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .question-card h4 { margin: 0 0 15px 0; color: var(--text-main); font-size: 16px; line-height: 1.4; }
+        .option-label { display: block; padding: 10px 15px; border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 10px; cursor: pointer; transition: 0.2s; color: var(--text-main); background: var(--bg-panel); }
+        .option-label:hover { border-color: #3498db; background: rgba(52, 152, 219, 0.05); }
+        .option-label input { margin-right: 10px; }
+        .feedback-box { margin-top: 15px; padding: 10px 15px; border-radius: 6px; font-size: 14px; display: none; }
+        .feedback-box.correct { background: #e8f8f5; border-left: 4px solid #2ecc71; color: #27ae60; display: block; }
+        .feedback-box.wrong { background: #fdedec; border-left: 4px solid #e74c3c; color: #c0392b; display: block; }
+        
+        .btn-submit { background: #3498db; color: white; border: none; padding: 12px 30px; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; display: block; margin: 0 auto 20px auto; }
+        .btn-submit:hover { background: #2980b9; }
+        .btn-retry { background: #f39c12; margin-top: 15px; }
+        .btn-retry:hover { background: #d68910; }
+        
+        .score-board { text-align: center; font-size: 20px; font-weight: bold; display: none; padding: 15px; background: #fff3cd; color: #856404; border-radius: 8px; border: 1px solid #ffeeba; margin-bottom: 20px; }
+
+        .missions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .mission-column { background: var(--bg-main); border-radius: 8px; padding: 20px; border: 1px solid var(--border-color); }
+        .mission-column h3 { margin-top: 0; display: flex; align-items: center; gap: 8px; color: var(--text-main); border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }
+        .task-card { background: var(--bg-panel); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #bdc3c7; }
+        .task-card.hard { border-left-color: #e74c3c; }
+        .task-card.medium { border-left-color: #f39c12; }
+        .task-card.easy { border-left-color: #2ecc71; }
+        .task-card h4 { margin: 0 0 5px 0; display: flex; align-items: center; gap: 5px; font-size: 15px; color: var(--text-main); }
+        .task-card p { font-size: 13px; color: #7f8c8d; margin: 5px 0 15px 0; line-height: 1.4; }
+        .btn-go { background: #2c3e50; color: white; padding: 6px 12px; border-radius: 4px; text-decoration: none; font-size: 13px; font-weight: bold; display: inline-flex; align-items: center; gap: 5px; transition: 0.2s; }
+        .btn-go:hover { background: #1a252f; }
+        .badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; color: white; font-weight: normal; margin-left: auto; }
+        .badge.hard { background: #e74c3c; } .badge.medium { background: #f39c12; } .badge.easy { background: #2ecc71; }
+        @media (max-width: 768px) { .missions-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <!-- Áp dụng theme tối nếu người dùng đã chọn trước đó -->
+    <script>
+        if (localStorage.getItem('myTheme') === 'dark') {
+            document.body.classList.add('dark-mode');
+        }
+    </script>
+
+    <!-- Thanh điều hướng với liên kết đến các trang khác -->
+    <div class="navbar">
+        <a href="index.html" class="nav-inactive"><span class="material-symbols-outlined">linear_scale</span> Danh Sách Liên Kết</a>
+        <a href="bst.html" class="nav-inactive"><span class="material-symbols-outlined">account_tree</span> Cây Nhị Phân (BST)</a>
+        <a href="quiz.html" class="nav-active"><span class="material-symbols-outlined">quiz</span> Thử thách</a>
+        <button class="btn-theme" onclick="toggleTheme()"><span class="material-symbols-outlined" id="themeIcon">dark_mode</span></button>
+    </div>
+
+    <!-- Khu vực chính chứa các chế độ quiz -->
+    <div class="main-container">
+        
+        <div id="select-mode" class="mode-selection">
+            <div class="mode-card situ" onclick="openMode('situ')">
+                <div class="material-symbols-outlined mode-icon" style="color: #3498db;">edit_square</div>
+                <div class="mode-title">Chế độ Sĩ Tử</div>
+                <div class="mode-desc">Thử thách kiến thức lý thuyết cốt lõi qua 10 câu hỏi trắc nghiệm. Nâng cao tư duy và hiểu sâu về cấu trúc dữ liệu.</div>
+            </div>
+            <div class="mode-card chienbinh" onclick="openMode('chienbinh')">
+                <div class="material-symbols-outlined mode-icon" style="color: #e74c3c;">swords</div>
+                <div class="mode-title">Chế độ Chiến Binh</div>
+                <div class="mode-desc">Thực chiến trực tiếp trên hệ thống Visualizer. Vượt qua các nhiệm vụ thao tác cấu trúc từ dễ đến khó.</div>
+            </div>
+        </div>
+
+        <div id="mode-situ" class="mode-container">
+            <div class="mode-header">
+                <h2><span class="material-symbols-outlined" style="color: #3498db;">edit_square</span> Bài Kiểm Tra Lý Thuyết</h2>
+                <button class="btn-exit" onclick="closeMode()"><span class="material-symbols-outlined">logout</span> Thoát</button>
+            </div>
+            
+            <div id="scoreBoard" class="score-board">
+                <span id="scoreText"></span>
+                <button class="btn-submit btn-retry" onclick="retryQuiz()">Làm lại bài kiểm tra</button>
+            </div>
+            
+            <div id="quizContainer"></div>
+            <button class="btn-submit" id="btnSubmitQuiz" onclick="submitQuiz()">Nộp Bài Trắc Nghiệm</button>
+        </div>
+
+        <div id="mode-chienbinh" class="mode-container">
+            <div class="mode-header">
+                <h2><span class="material-symbols-outlined" style="color: #e74c3c;">swords</span> Thực Chiến Visualizer</h2>
+                <button class="btn-exit" onclick="closeMode()"><span class="material-symbols-outlined">logout</span> Thoát</button>
+            </div>
+            
+            <div class="missions-grid">
+                <div class="mission-column">
+                    <h3><span class="material-symbols-outlined" style="color: #3498db;">linear_scale</span> Danh Sách Liên Kết</h3>
+                    
+                    <div class="task-card easy">
+                        <h4>Nhiệm vụ 1 <span class="badge easy">Dễ</span></h4>
+                        <p>Dùng lệnh AddHead/AddTail để tạo đúng danh sách: <b>10 -> 20 -> 30</b>.</p>
+                        <a href="index.html?mission=ll_1" class="btn-go"><span class="material-symbols-outlined">play_arrow</span> Tham chiến</a>
+                    </div>
+
+                    <div class="task-card medium">
+                        <h4>Nhiệm vụ 2 <span class="badge medium">Trung bình</span></h4>
+                        <p>Tạo <b>50 -> 40 -> 30 -> 20</b>. Sau đó dùng lệnh <b>DelHead</b> để xóa 50. Mục tiêu: <b>40 -> 30 -> 20</b>.</p>
+                        <a href="index.html?mission=ll_2" class="btn-go"><span class="material-symbols-outlined">play_arrow</span> Tham chiến</a>
+                    </div>
+
+                    <div class="task-card hard">
+                        <h4>Nhiệm vụ 3 <span class="badge hard">Khó</span></h4>
+                        <p>Tạo <b>10 -> 30</b>. Dùng <b>AddAfterQ</b> chèn 20 vào sau 10, rồi dùng <b>AddTail</b> chèn 40. Mục tiêu: <b>10 -> 20 -> 30 -> 40</b>.</p>
+                        <a href="index.html?mission=ll_3" class="btn-go"><span class="material-symbols-outlined">play_arrow</span> Tham chiến</a>
+                    </div>
+                </div>
+
+                <div class="mission-column">
+                    <h3><span class="material-symbols-outlined" style="color: #2ecc71;">park</span> Cây Nhị Phân (BST)</h3>
+                    
+                    <div class="task-card easy">
+                        <h4>Nhiệm vụ 1 <span class="badge easy">Dễ</span></h4>
+                        <p>Tạo một cây nhị phân cơ bản gồm 1 Gốc (Root) và ít nhất 2 nhánh Con hai bên.</p>
+                        <a href="bst.html?mission=bst_1" class="btn-go"><span class="material-symbols-outlined">play_arrow</span> Tham chiến</a>
+                    </div>
+
+                    <div class="task-card medium">
+                        <h4>Nhiệm vụ 2 <span class="badge medium">Trung bình</span></h4>
+                        <p>Tạo cây bị <b>suy biến</b> thành Linked List dài <b>5 Node</b> (Gợi ý: chèn các số tăng dần).</p>
+                        <a href="bst.html?mission=bst_2" class="btn-go"><span class="material-symbols-outlined">play_arrow</span> Tham chiến</a>
+                    </div>
+
+                    <div class="task-card hard">
+                        <h4>Nhiệm vụ 3 <span class="badge hard">Khó</span></h4>
+                        <p>Tạo "Cây Nhị Phân Hoàn Hảo" (Perfect BST) có <b>7 Node</b> và chiều cao đúng bằng <b>3</b>.</p>
+                        <a href="bst.html?mission=bst_3" class="btn-go"><span class="material-symbols-outlined">play_arrow</span> Tham chiến</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Dữ liệu câu hỏi trắc nghiệm cho chế độ Sĩ Tử
+        const originalQuizData = [
+            { q: "Thuật toán Duyệt LNR (Inorder) trên cây BST cho ra kết quả gì?", options: ["Các phần tử giảm dần", "Các phần tử tăng dần", "Root luôn nằm cuối", "Root luôn nằm đầu"], ans: 1, exp: "LNR duyệt theo thứ tự Trái - Gốc - Phải. Do tính chất của BST (Trái < Gốc < Phải), duyệt LNR sẽ luôn in ra mảng tăng dần." },
+            { q: "Khi thêm một Node P vào ĐẦU danh sách liên kết đơn (Head), thao tác nào sau đây là đúng?", options: ["Head = P; P.next = Head", "P.next = Head; Head = P", "P.next = NULL; Head = P", "Head.next = P; P = Head"], ans: 1, exp: "Phải trỏ phần tử tiếp theo của P vào Head cũ trước, sau đó mới cập nhật Head trỏ vào P để không làm đứt gãy danh sách." },
+            { q: "Độ phức tạp thời gian khi tìm kiếm trên Cây BST hoàn hảo (Perfect BST) là bao nhiêu?", options: ["O(1)", "O(n)", "O(log n)", "O(n^2)"], ans: 2, exp: "Cây hoàn hảo có chiều cao log(n). Tại mỗi bước rẽ trái/phải, ta đã loại bỏ được một nửa số Node cần tìm kiếm -> Độ phức tạp O(log n)." },
+            { q: "Đặc điểm nào KHÔNG phải của Danh sách liên kết đơn?", options: ["Kích thước thay đổi động", "Các phần tử lưu trữ liên tiếp trong RAM", "Chèn/Xóa ở đầu cực nhanh O(1)", "Mỗi Node chứa Data và Con trỏ"], ans: 1, exp: "Khác với Mảng, các Node trong DSLK được cấp phát rải rác (bất kỳ đâu trống trong RAM) và liên kết nhau bằng con trỏ." },
+            { q: "Trong Cây nhị phân tìm kiếm (BST), phần tử NHỎ NHẤT nằm ở đâu?", options: ["Gốc của cây (Root)", "Lá ngoài cùng bên phải", "Lá ngoài cùng bên trái", "Không xác định được"], ans: 2, exp: "Theo tính chất BST, cứ đi sang trái thì giá trị càng nhỏ. Node tận cùng bên trái chính là giá trị Min." },
+            { q: "Độ phức tạp khi xóa phần tử ở CUỐI danh sách liên kết đơn (khi chỉ có con trỏ Head) là?", options: ["O(1)", "O(log n)", "O(n)", "O(n^2)"], ans: 2, exp: "Để xóa phần tử cuối, ta bắt buộc phải duyệt từ Head xuống tận Node kề cuối để set `next = NULL`. Việc duyệt tốn O(n)." },
+            { q: "Cây BST bị 'suy biến' (Degenerate) có hình dạng giống với cấu trúc dữ liệu nào nhất?", options: ["Mảng 2 chiều", "Đồ thị có hướng", "Danh sách liên kết", "Cây AVL"], ans: 2, exp: "Khi chèn các phần tử đã được sắp xếp sẵn (VD: 1, 2, 3, 4, 5), cây sẽ chỉ mọc 1 nhánh duy nhất bên phải, trông hệt như DSLK." },
+            { q: "Trong hàm duyệt LRN (Postorder), gốc (Root) của cây sẽ được xử lý khi nào?", options: ["Đầu tiên", "Cuối cùng", "Ở giữa", "Ngẫu nhiên"], ans: 1, exp: "LRN là viết tắt của Trái - Phải - Node(Gốc). Do đó Node hiện tại luôn được xử lý (in ra) cuối cùng." },
+            { q: "Khi xóa một Node X có 2 con trong BST, ta có thể thay thế giá trị của X bằng?", options: ["Giá trị lớn nhất nhánh trái", "Giá trị nhỏ nhất nhánh trái", "Giá trị gốc của cây", "Giá trị ngẫu nhiên"], ans: 0, exp: "Quy tắc xóa Node 2 con: Thế mạng bằng Node Lớn nhất của nhánh Trái (Max Left) HOẶC Nhỏ nhất của nhánh Phải (Min Right)." },
+            { q: "Dấu hiệu để nhận biết Node CUỐI CÙNG (Tail) trong danh sách liên kết đơn là gì?", options: ["Giá trị bằng 0", "Con trỏ next trỏ vào chính nó", "Con trỏ next mang giá trị NULL", "Node đó không chứa Data"], ans: 2, exp: "Node cuối cùng không còn liên kết tới phần tử nào nữa, do đó con trỏ (link) của nó mang giá trị rỗng (NULL / None)." }
+        ];
+
+        // Mảng chứa câu hỏi hiện tại sau khi trộn
+        let currentQuizData = [];
+
+        // Sự kiện load trang - Kiểm tra URL để mở chế độ Chiến Binh nếu cần
+        window.addEventListener('load', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('mode') === 'chienbinh') {
+                openMode('chienbinh');
+            }
+        });
+
+        // Hàm mở chế độ quiz (Sĩ Tử hoặc Chiến Binh)
+        function openMode(modeId) {
+            document.getElementById('select-mode').style.display = 'none';
+            if(modeId === 'situ') {
+                document.getElementById('mode-situ').style.display = 'block';
+                retryQuiz(); // Tạo mới và trộn câu hỏi
+            } else {
+                document.getElementById('mode-chienbinh').style.display = 'block';
+            }
+        }
+
+        // Hàm đóng chế độ quiz và quay về màn hình chọn chế độ
+        function closeMode() {
+            document.getElementById('mode-situ').style.display = 'none';
+            document.getElementById('mode-chienbinh').style.display = 'none';
+            document.getElementById('select-mode').style.display = 'flex';
+            // Xóa param trên URL nếu có
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        // Hàm tạo lại quiz với câu hỏi trộn ngẫu nhiên
+        function retryQuiz() {
+            // Trộn câu hỏi ngẫu nhiên
+            currentQuizData = [...originalQuizData].sort(() => Math.random() - 0.5);
+            
+            const container = document.getElementById('quizContainer');
+            container.innerHTML = ''; 
+            document.getElementById('scoreBoard').style.display = 'none';
+            document.getElementById('btnSubmitQuiz').style.display = 'block';
+
+            currentQuizData.forEach((q, i) => {
+                let optionsHtml = '';
+                q.options.forEach((opt, j) => {
+                    optionsHtml += `
+                        <label class="option-label" id="label-q${i}-opt${j}">
+                            <input type="radio" name="q${i}" value="${j}"> ${opt}
+                        </label>
+                    `;
+                });
+
+                container.innerHTML += `
+                    <div class="question-card" id="qcard-${i}">
+                        <h4>Câu ${i + 1}: ${q.q}</h4>
+                        <div class="options-group">${optionsHtml}</div>
+                        <div class="feedback-box" id="feedback-${i}">
+                            <strong>Giải thích:</strong> <span class="exp-text">${q.exp}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            document.getElementById('mode-situ').scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function submitQuiz() {
+            // Khởi tạo biến theo dõi kết quả
+            let score = 0;
+            let answered = 0;
+
+            currentQuizData.forEach((q, i) => {
+                const selected = document.querySelector(`input[name="q${i}"]:checked`);
+                if (selected) answered++;
+            });
+
+            // Cảnh báo nếu chưa hoàn thành bài làm
+            if (answered < currentQuizData.length) {
+                if(!confirm("Bạn chưa trả lời hết các câu hỏi. Vẫn muốn nộp bài chứ?")) return;
+            }
+
+            currentQuizData.forEach((q, i) => {
+                const selected = document.querySelector(`input[name="q${i}"]:checked`);
+                const feedbackBox = document.getElementById(`feedback-${i}`);
+                
+                document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => radio.disabled = true);
+
+                if (selected) {
+                    const selVal = parseInt(selected.value);
+                    if (selVal === q.ans) {
+                        score++;
+                        feedbackBox.className = "feedback-box correct";
+                        feedbackBox.innerHTML = `✅ <b>Chính xác!</b> ${q.exp}`;
+                    } else {
+                        feedbackBox.className = "feedback-box wrong";
+                        feedbackBox.innerHTML = `❌ <b>Sai.</b> Đáp án đúng là: <i>${q.options[q.ans]}</i>.<br><b>Giải thích:</b> ${q.exp}`;
+                        document.getElementById(`label-q${i}-opt${selVal}`).style.borderColor = '#e74c3c';
+                        document.getElementById(`label-q${i}-opt${selVal}`).style.backgroundColor = '#fdedec';
+                    }
+                } else {
+                    feedbackBox.className = "feedback-box wrong";
+                    feedbackBox.innerHTML = `⚠️ <b>Bỏ trống.</b> Đáp án đúng là: <i>${q.options[q.ans]}</i>.<br><b>Giải thích:</b> ${q.exp}`;
+                }
+                
+                document.getElementById(`label-q${i}-opt${q.ans}`).style.borderColor = '#2ecc71';
+                document.getElementById(`label-q${i}-opt${q.ans}`).style.backgroundColor = '#e8f8f5';
+                feedbackBox.style.display = 'block';
+            });
+
+            document.getElementById('scoreText').innerText = `🏆 Điểm của bạn: ${score} / ${currentQuizData.length}`;
+            document.getElementById('scoreBoard').style.display = 'block';
+            document.getElementById('btnSubmitQuiz').style.display = 'none'; 
+            document.getElementById('mode-situ').scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        const themeIcon = document.getElementById('themeIcon');
+        if (localStorage.getItem('theme') === 'dark') {
+            document.body.classList.add('dark-mode'); themeIcon.innerText = 'light_mode';
+        }
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+            if (document.body.classList.contains('dark-mode')) {
+                localStorage.setItem('myTheme', 'dark'); themeIcon.innerText = 'light_mode';
+            } else {
+                localStorage.setItem('myTheme', 'light'); themeIcon.innerText = 'dark_mode';
+            }
+        }
+    </script>
+</body>
+</html>

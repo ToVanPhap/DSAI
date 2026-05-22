@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DSA Visualizer - Binary Search Tree</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Kiểu dáng đặc biệt cho màn hình BST, cuộn tự động và dòng kẻ SVG -->
+    <style>
+        .visual-area { overflow: auto; position: relative; scroll-behavior: smooth; }
+        #tree-canvas { position: relative; min-width: 3000px; min-height: 1500px; }
+        svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+        
+        .visual-area::-webkit-scrollbar { width: 10px; height: 10px; }
+        .visual-area::-webkit-scrollbar-track { background: var(--bg-main); border-radius: 5px; }
+        .visual-area::-webkit-scrollbar-thumb { background: #bdc3c7; border-radius: 5px; }
+        .visual-area::-webkit-scrollbar-thumb:hover { background: #95a5a6; }
+        body.dark-mode .visual-area::-webkit-scrollbar-thumb { background: #4b5363; }
+
+        .tree-node { position: absolute; background-color: #2ecc71; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2); transition: all 0.5s ease; z-index: 2; transform: translate(-50%, -50%); }
+        .tree-node.highlight { background-color: #f1c40f; color: black; box-shadow: 0 0 15px #f1c40f; transform: translate(-50%, -50%) scale(1.3) !important; }
+        .tree-node.found { background-color: #3498db; box-shadow: 0 0 15px #3498db; transform: translate(-50%, -50%) scale(1.3) !important; }
+        .tree-node.deleting { background-color: #e74c3c; opacity: 0; transform: translate(-50%, -50%) scale(0) !important; }
+        
+        .player-panel { justify-content: center; min-width: 200px; }
+    </style>
+</head>
+<body>
+
+    <!-- Áp dụng theme tối nếu người dùng đã chọn trước đó -->
+    <script>
+        if (localStorage.getItem('myTheme') === 'dark') {
+            document.body.classList.add('dark-mode');
+        }
+    </script>
+
+    <!-- Thanh điều hướng với liên kết đến các trang khác -->
+    <div class="navbar">
+        <a href="index.html" class="nav-inactive"><span class="material-symbols-outlined">linear_scale</span> Danh Sách Liên Kết</a>
+        <a href="bst.html" class="nav-active"><span class="material-symbols-outlined">account_tree</span> Cây Nhị Phân (BST)</a>
+        <a href="quiz.html" class="nav-inactive"><span class="material-symbols-outlined">quiz</span> Thử thách</a>
+        <button class="btn-theme" onclick="toggleTheme()"><span class="material-symbols-outlined" id="themeIcon">dark_mode</span></button>
+    </div>
+
+    <!-- Tiêu đề chính của trang BST -->
+    <h1><span class="material-symbols-outlined" style="font-size: 28px; color: #27ae60;">park</span> Cây Nhị Phân Tìm Kiếm</h1>
+    
+    <!-- Khu vực điều khiển gồm nhập giá trị, chèn, tìm, xóa và các nút duyệt -->
+    <div class="controls-wrapper">
+        <div class="control-panel">
+            <span class="panel-title">Giá trị X:</span>
+            <input type="number" id="nodeValue" value="">
+            <button class="btn-add" onclick="insertNode()"><span class="material-symbols-outlined">add_circle</span> Chèn</button>
+            <button class="btn-search" style="background-color: #f39c12;" onclick="searchNode()"><span class="material-symbols-outlined">search</span> Tìm</button>
+            <button class="btn-del" onclick="deleteNode()"><span class="material-symbols-outlined">delete</span> Xóa</button>
+        </div>
+
+        <div class="control-panel">
+            <span class="panel-title">Duyệt:</span>
+            <button class="btn-trav" onclick="traverseBST('preorder')">NLR (Preorder)</button>
+            <button class="btn-trav" onclick="traverseBST('inorder')">LNR (Inorder)</button>
+            <button class="btn-trav" onclick="traverseBST('postorder')">LRN (Postorder)</button>
+        </div>
+
+        <div class="control-panel">
+            <button class="btn-random" onclick="randomizeBST()"><span class="material-symbols-outlined">shuffle</span> Random</button>
+            <button class="btn-reset" onclick="resetTree()"><span class="material-symbols-outlined">refresh</span> Làm trống</button>
+        </div>
+
+        <div class="player-panel">
+            <button class="player-btn" onclick="prevStep()" title="Lùi 1 bước"><span class="material-symbols-outlined">skip_previous</span></button>
+            <button class="player-btn" id="playBtn" onclick="togglePlay()" title="Phát/Tạm dừng"><span class="material-symbols-outlined" id="playIcon">play_arrow</span></button>
+            <button class="player-btn" onclick="nextStep()" title="Tiến 1 bước"><span class="material-symbols-outlined">skip_next</span></button>
+            <span id="stepCounterDisplay" style="margin-left: 10px; min-width: 40px;">0/0</span>
+        </div>
+
+        <div class="control-panel slider-container">
+            <span class="material-symbols-outlined">speed</span>
+            <input type="range" id="speedRange" min="0.25" max="3" step="0.25" value="1" oninput="changeSpeed()">
+            <span id="speedLabel" style="color: #e74c3c; font-weight: bold; width: 35px;">x1</span>
+        </div>
+    </div>
+
+    <!-- Thanh trạng thái hiển thị thông báo và chi phí Big O -->
+    <div class="dashboard-strip">
+        <div class="status-text">
+            <span class="material-symbols-outlined">psychology</span>
+            <span id="aiStatus">Hệ thống Cây nhị phân sẵn sàng. Cây đang trống!</span>
+        </div>
+        <div class="big-o-tracker" style="color: #f1edec; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: bold;">
+            <span class="material-symbols-outlined" style="font-size: 20px;">analytics</span>
+            <span id="costDisplay">So sánh: 0 lần | Hiệu suất: O(1)</span>
+        </div>
+    </div>
+
+    <!-- Khung chính chứa vùng hiển thị cây và vùng hiển thị mã giả thuật toán -->
+    <div class="container">
+        <div class="visual-area" id="visualArea">
+            <div id="tree-canvas">
+                <svg id="svgEdges"></svg>
+                <div id="nodesContainer"></div>
+            </div>
+        </div>
+        
+        <div class="code-area" id="codeArea">
+            <h3 class="code-title">
+                <span class="material-symbols-outlined">code</span> Mã giả thuật toán
+                <button class="btn-export" style="background:#34495e; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; float:right;" onclick="openCodeModal()">
+                    <span class="material-symbols-outlined" style="font-size:16px; vertical-align:middle;">integration_instructions</span> Xem Code
+                </button>
+            </h3>
+            <div id="pseudoContent">Bấm một nút chức năng để xem mã giả...</div>
+        </div>
+    </div>
+
+    <!-- Modal hiển thị code minh họa BST trong các ngôn ngữ khác nhau -->
+    <div class="modal-overlay" id="codeModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center;">
+        <div class="modal-content" style="background:var(--bg-panel); width:650px; max-width:95%; border-radius:8px; overflow:hidden;">
+            <div class="modal-header" style="padding:15px; background:#21252b; display:flex; justify-content:space-between; align-items:center;">
+                <div class="modal-title" style="color:#61afef; font-weight:bold;"><span class="material-symbols-outlined" style="vertical-align:middle;">terminal</span> Code minh họa BST</div>
+                <span class="material-symbols-outlined modal-close" style="color:#abb2bf; cursor:pointer;" onclick="closeCodeModal()">close</span>
+            </div>
+            <div class="modal-tabs" style="background:#21252b; display:flex;">
+                <button class="tab-btn active" onclick="switchTab('cpp')" style="padding:10px 20px; background:transparent; border:none; color:#abb2bf; cursor:pointer; border-bottom:2px solid transparent;">C++</button>
+                <button class="tab-btn" onclick="switchTab('python')" style="padding:10px 20px; background:transparent; border:none; color:#abb2bf; cursor:pointer; border-bottom:2px solid transparent;">Python</button>
+                <button class="tab-btn" onclick="switchTab('java')" style="padding:10px 20px; background:transparent; border:none; color:#abb2bf; cursor:pointer; border-bottom:2px solid transparent;">Java</button>
+            </div>
+            <div class="modal-body" style="padding:15px; position:relative; background:#282c34;">
+                <button class="btn-copy" onclick="copyCode()" style="position:absolute; top:10px; right:10px; background:#3e4451; color:#abb2bf; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Copy</button>
+                <pre style="margin:0; overflow-x:auto;"><code id="sourceCodeBlock" style="color:#e06c75; font-family:monospace; white-space:pre-wrap;">// Vui lòng chạy một chức năng (Insert, Search...) để xem code tương ứng.</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // PSEUDOCODE: Các bước thuật toán đơn giản sẽ được hiển thị từng bước khi người dùng thao tác
+        const PSEUDOCODE = {
+            'Insert': ["1. Nếu Cây rỗng: Root = X", "2. Duyệt từ Root để tìm vị trí:", "3.    Nếu X < Node hiện tại: Đi sang Trái", "4.    Nếu X > Node hiện tại: Đi sang Phải", "5. Chèn X vào vị trí trống tương ứng.", "6. Bỏ qua nếu X đã tồn tại."],
+            'Search': ["1. Bắt đầu từ Root", "2. Nếu X == Node.val: Trả về TRUE", "3. Nếu X < Node.val: Tìm ở nhánh Trái", "4. Nếu X > Node.val: Tìm ở nhánh Phải", "5. Nếu gặp NULL: Trả về FALSE (Không thấy)"],
+            'Delete': ["1. Tìm Node X cần xóa", "2. NẾU X không có (hoặc 1) nhánh trái -> nối nhánh phải", "3. NẾU X không có nhánh phải -> nối nhánh trái", "4. NẾU X có 2 con: Tìm Node thế mạng (Nhỏ nhất nhánh phải)", "5. Xác định Node thế mạng", "6. Sao chép giá trị thế mạng đè lên X", "7. Xóa Node thế mạng ở nhánh dưới", "8. Hoàn tất xóa"],
+            'Preorder': ["Hàm PreOrder(node):", "1. Nếu node == NULL: return", "2. Xử lý node hiện tại (In ra)", "3. PreOrder(node.left)", "4. PreOrder(node.right)"],
+            'Inorder': ["Hàm InOrder(node):", "1. Nếu node == NULL: return", "2. InOrder(node.left)", "3. Xử lý node hiện tại (In ra)", "4. InOrder(node.right)"],
+            'Postorder': ["Hàm PostOrder(node):", "1. Nếu node == NULL: return", "2. PostOrder(node.left)", "3. PostOrder(node.right)", "4. Xử lý node hiện tại (In ra)"]
+        };
+
+        // SOURCE_CODE: Mã nguồn thực tế trong C++, Python, Java cho từng thao tác BST
+        const SOURCE_CODE = {
+            'Insert': { 'cpp': `Node* insert(Node* root, int val) {\n    if (root == NULL) return new Node(val);\n    if (val < root->val)\n        root->left = insert(root->left, val);\n    else if (val > root->val)\n        root->right = insert(root->right, val);\n    return root;\n}`, 'python': `def insert(self, root, val):\n    if root is None:\n        return Node(val)\n    if val < root.val:\n        root.left = self.insert(root.left, val)\n    elif val > root.val:\n        root.right = self.insert(root.right, val)\n    return root`, 'java': `public Node insert(Node root, int val) {\n    if (root == null) return new Node(val);\n    if (val < root.val)\n        root.left = insert(root.left, val);\n    else if (val > root.val)\n        root.right = insert(root.right, val);\n    return root;\n}` },
+            'Search': { 'cpp': `bool search(Node* root, int val) {\n    if (root == NULL) return false;\n    if (root->val == val) return true;\n    if (val < root->val)\n        return search(root->left, val);\n    return search(root->right, val);\n}`, 'python': `def search(self, root, val):\n    if root is None:\n        return False\n    if root.val == val:\n        return True\n    if val < root.val:\n        return self.search(root.left, val)\n    return self.search(root.right, val)`, 'java': `public boolean search(Node root, int val) {\n    if (root == null) return false;\n    if (root.val == val) return true;\n    if (val < root.val)\n        return search(root.left, val);\n    return search(root.right, val);\n}` },
+            'Delete': { 'cpp': `Node* deleteNode(Node* root, int key) {\n    if (root == NULL) return root;\n    if (key < root->val) root->left = deleteNode(root->left, key);\n    else if (key > root->val) root->right = deleteNode(root->right, key);\n    else {\n        if (root->left == NULL) return root->right;\n        else if (root->right == NULL) return root->left;\n        Node* minRight = root->right;\n        while (minRight->left != NULL) minRight = minRight->left;\n        root->val = minRight->val;\n        root->right = deleteNode(root->right, minRight->val);\n    }\n    return root;\n}`, 'python': `def deleteNode(self, root, key):\n    if not root: return root\n    if key < root.val: root.left = self.deleteNode(root.left, key)\n    elif key > root.val: root.right = self.deleteNode(root.right, key)\n    else:\n        if not root.left: return root.right\n        if not root.right: return root.left\n        min_right = root.right\n        while min_right.left: min_right = min_right.left\n        root.val = min_right.val\n        root.right = self.deleteNode(root.right, min_right.val)\n    return root`, 'java': `public Node deleteNode(Node root, int key) {\n    if (root == null) return root;\n    if (key < root.val) root.left = deleteNode(root.left, key);\n    else if (key > root.val) root.right = deleteNode(root.right, key);\n    else {\n        if (root.left == null) return root.right;\n        else if (root.right == null) return root.left;\n        Node minRight = root.right;\n        while (minRight.left != null) minRight = minRight.left;\n        root.val = minRight.val;\n        root.right = deleteNode(root.right, minRight.val);\n    }\n    return root;\n}` },
+            'Preorder': { 'cpp': `void preorder(Node* root) {\n    if (root == NULL) return;\n    cout << root->val << " ";\n    preorder(root->left);\n    preorder(root->right);\n}`, 'python': `def preorder(self, root):\n    if root is not None:\n        print(root.val, end=" ")\n        self.preorder(root.left)\n        self.preorder(root.right)`, 'java': `public void preorder(Node root) {\n    if (root == null) return;\n    System.out.print(root.val + " ");\n    preorder(root.left);\n    preorder(root.right);\n}` },
+            'Inorder': { 'cpp': `void inorder(Node* root) {\n    if (root == NULL) return;\n    inorder(root->left);\n    cout << root->val << " ";\n    inorder(root->right);\n}`, 'python': `def inorder(self, root):\n    if root is not None:\n        self.inorder(root.left)\n        print(root.val, end=" ")\n        self.inorder(root.right)`, 'java': `public void inorder(Node root) {\n    if (root == null) return;\n    inorder(root.left);\n    System.out.print(root.val + " ");\n    inorder(root.right);\n}` },
+            'Postorder': { 'cpp': `void postorder(Node* root) {\n    if (root == NULL) return;\n    postorder(root->left);\n    postorder(root->right);\n    cout << root->val << " ";\n}`, 'python': `def postorder(self, root):\n    if root is not None:\n        self.postorder(root.left)\n        self.postorder(root.right)\n        print(root.val, end=" ")`, 'java': `public void postorder(Node root) {\n    if (root == null) return;\n    postorder(root.left);\n    postorder(root.right);\n    System.out.print(root.val + " ");\n}` }
+        };
+
+        // Lớp Node đại diện cho một node trong cây BST
+        class Node {
+            constructor(val) {
+                this.val = val; this.left = null; this.right = null;
+                this.id = 'n_' + Math.random().toString(36).substr(2, 5);
+                this.x = 0; this.y = 0;
+            }
+        }
+
+        // Biến toàn cục cho cây BST và trạng thái ứng dụng
+        let root = null;
+        let currentAlgorithm = 'Base';
+        let currentLang = 'cpp';
+        
+        // --- BIẾN TOÀN CỤC MỚI ĐỂ LƯU CHI PHÍ ---
+        let currentCost = 0; 
+
+        // Biến cho hệ thống player để điều khiển animation
+        let historyQueue = [];
+        let currentIndex = 0;
+        let playTimer = null;
+        let isPlaying = false;
+
+        // Các hàm quản lý modal hiển thị code
+        function openCodeModal() { document.getElementById('codeModal').style.display = 'flex'; updateCodeBlock(); }
+        function closeCodeModal() { document.getElementById('codeModal').style.display = 'none'; }
+        function switchTab(lang) {
+            // Cập nhật trạng thái UI của các tab ngôn ngữ
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.style.borderBottom = '2px solid transparent');
+            event.target.style.borderBottom = '2px solid #61afef';
+            currentLang = lang; updateCodeBlock();
+        }
+        function updateCodeBlock() {
+            if(SOURCE_CODE[currentAlgorithm] && SOURCE_CODE[currentAlgorithm][currentLang]) {
+                document.getElementById('sourceCodeBlock').innerText = SOURCE_CODE[currentAlgorithm][currentLang];
+            } else {
+                document.getElementById('sourceCodeBlock').innerText = "// Vui lòng chạy một chức năng thuật toán (Insert, Search...) để xem code.";
+            }
+        }
+        function copyCode() { navigator.clipboard.writeText(document.getElementById('sourceCodeBlock').innerText); alert("Đã copy mã nguồn thành công!"); }
+
+        // Các hàm tiện ích cho BST
+        function getBstHeight(node) {
+            if (!node) return 0;
+            return 1 + Math.max(getBstHeight(node.left), getBstHeight(node.right));
+        }
+
+        // Tạo bản sao vật lý của cây để lưu vào lịch sử (tránh tham chiếu khi cây thay đổi)
+        function cloneTree(node) {
+            if(!node) return null;
+            let newNode = new Node(node.val);
+            newNode.id = node.id; newNode.x = node.x; newNode.y = node.y;
+            newNode.left = cloneTree(node.left);
+            newNode.right = cloneTree(node.right);
+            return newNode;
+        }
+
+        // Hàm tính toán vị trí các node trên canvas để vẽ cây
+        function calculatePositionsNGAM(node, x, y, hGap, vGap) {
+            // Sử dụng thuật toán đệ quy để tính tọa độ (x, y) dựa trên khoảng cách tầng (vGap) và khoảng cách ngang (hGap)
+            if (!node) return;
+            node.x = x; node.y = y;
+            let nextGap = Math.max(35, hGap / 1.7);
+            calculatePositionsNGAM(node.left, x - hGap, y + vGap, nextGap, vGap);
+            calculatePositionsNGAM(node.right, x + hGap, y + vGap, nextGap, vGap);
+        }
+
+        // Hàm ghi lại trạng thái của cây để phục vụ animation
+        function recordState(pseudoIdx, statusText, hId = null, fId = null, dId = null) {
+            let currentScale = 1;
+            if (root) {
+                // Tự động thu nhỏ cây nếu chiều cao quá lớn để tránh tràn khung hình
+                let h = getBstHeight(root);
+                if (h > 4) { currentScale = Math.max(0.5, 4 / h); }
+                calculatePositionsNGAM(root, 1500, 60 * currentScale, 220 * Math.max(0.8, currentScale), 80 * currentScale);
+            }
+            historyQueue.push({
+                rootSnapshot: cloneTree(root),
+                pseudo: pseudoIdx, status: statusText,
+                hId: hId, fId: fId, dId: dId,
+                scale: currentScale,
+                cost: currentCost // LƯU LẠI CHI PHÍ Ở TỪNG BƯỚC
+            });
+        }
+
+        // Các hàm điều khiển player cho animation
+        function changeSpeed() {
+            document.getElementById('speedLabel').innerText = 'x' + document.getElementById('speedRange').value;
+            if(isPlaying) { togglePlay(); togglePlay(); }
+        }
+
+        function resetPlayer() {
+            clearInterval(playTimer); isPlaying = false; historyQueue = []; currentIndex = 0;
+            document.getElementById('playIcon').innerText = 'play_arrow';
+            document.getElementById('stepCounterDisplay').innerText = `0/0`;
+        }
+
+        function startPlayback() {
+            if(historyQueue.length === 0) return;
+            currentIndex = 0; renderStep(0); togglePlay();
+        }
+
+        function togglePlay() {
+            if (isPlaying) {
+                clearInterval(playTimer); isPlaying = false;
+                document.getElementById('playIcon').innerText = 'play_arrow';
+            } else {
+                if(historyQueue.length === 0) return;
+                if(currentIndex >= historyQueue.length - 1) currentIndex = 0;
+                isPlaying = true; document.getElementById('playIcon').innerText = 'pause';
+                let speed = parseFloat(document.getElementById('speedRange').value);
+                playTimer = setInterval(() => {
+                    if (currentIndex < historyQueue.length - 1) { currentIndex++; renderStep(currentIndex); } 
+                    else { togglePlay(); }
+                }, 1500 / speed);
+            }
+        }
+        function nextStep() { pause(); if(currentIndex < historyQueue.length - 1) renderStep(++currentIndex); }
+        function prevStep() { pause(); if(currentIndex > 0) renderStep(--currentIndex); }
+        function pause() { if(isPlaying) togglePlay(); }
+
+        // --- RENDER GIAO DIỆN LẠI ---
+        function renderStep(index) {
+            if(!historyQueue[index]) return;
+            const state = historyQueue[index];
+            document.getElementById('stepCounterDisplay').innerText = `${index + 1}/${historyQueue.length}`;
+            document.getElementById('aiStatus').innerText = state.status;
+
+            // XỬ LÝ TEXT CHI PHÍ
+            let costText = `So sánh: ${state.cost || 0} lần | Hiệu suất: O(log n)`;
+            if (currentAlgorithm.includes('order')) costText = `Đã duyệt: ${state.cost || 0} Node | Hiệu suất: O(n)`;
+            else if (currentAlgorithm === 'Base') costText = `So sánh: 0 lần | Hiệu suất: O(1)`;
+            
+            if(document.getElementById('costDisplay')) document.getElementById('costDisplay').innerText = costText;
+
+            let html = '';
+            if(PSEUDOCODE[currentAlgorithm]) {
+                PSEUDOCODE[currentAlgorithm].forEach((line, i) => {
+                    html += `<div class="code-line ${i === state.pseudo ? 'active' : ''}">${line}</div>`;
+                });
+            }
+            document.getElementById('pseudoContent').innerHTML = html;
+
+            const svg = document.getElementById('svgEdges');
+            const container = document.getElementById('nodesContainer');
+            svg.innerHTML = ''; container.innerHTML = '';
+            
+            const scale = state.scale || 1;
+            const nodeSize = 38 * scale; const fontSize = 14 * scale; const strokeWidth = 2 * scale;
+
+            function drawRecursive(node) {
+                if(!node) return;
+                const el = document.createElement('div');
+                el.className = `tree-node ${node.id === state.hId ? 'highlight' : ''} ${node.id === state.fId ? 'found' : ''} ${node.id === state.dId ? 'deleting' : ''}`;
+                el.innerText = node.val; el.style.left = `${node.x}px`; el.style.top = `${node.y}px`;
+                el.style.width = `${nodeSize}px`; el.style.height = `${nodeSize}px`; el.style.fontSize = `${fontSize}px`;
+                container.appendChild(el);
+
+                if(node.left) {
+                    // Vẽ đường nối bằng SVG giữa node cha và node con trái
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('x1', node.x); line.setAttribute('y1', node.y); line.setAttribute('x2', node.left.x); line.setAttribute('y2', node.left.y);
+                    line.setAttribute('stroke', '#bdc3c7'); line.setAttribute('stroke-width', strokeWidth);
+                    svg.appendChild(line); drawRecursive(node.left);
+                }
+                if(node.right) {
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    // Vẽ đường nối bằng SVG giữa node cha và node con phải
+                    line.setAttribute('x1', node.x); line.setAttribute('y1', node.y); line.setAttribute('x2', node.right.x); line.setAttribute('y2', node.right.y);
+                    line.setAttribute('stroke', '#bdc3c7'); line.setAttribute('stroke-width', strokeWidth);
+                    svg.appendChild(line); drawRecursive(node.right);
+                }
+            }
+            drawRecursive(state.rootSnapshot);
+        }
+
+        // Hàm làm trống cây BST
+        function resetTree() {
+            pause(); root = null; currentAlgorithm = 'Base'; resetPlayer(); currentCost = 0;
+            recordState(-1, "Đã làm trống toàn bộ cây."); renderStep(0);
+        }
+
+        // Hàm tạo cây BST mẫu ngẫu nhiên
+        function randomizeBST() {
+            pause(); root = null; currentCost = 0;
+            let arr = [50, 30, 70, 20, 40, 60, 80];
+            arr.forEach(v => {
+                let n = new Node(v);
+                if(!root) root = n;
+                else {
+                    let c = root;
+                    while(c) {
+                        if(v < c.val) { if(!c.left){ c.left = n; break;} else c=c.left;}
+                        else { if(!c.right){ c.right = n; break;} else c=c.right;}
+                    }
+                }
+            });
+            currentAlgorithm = 'Base'; resetPlayer(); 
+            recordState(-1, "Đã khởi tạo cây mẫu."); renderStep(0);
+        }
+
+        // Hàm chèn node vào BST
+        function insertNode() {
+            let val = parseInt(document.getElementById('nodeValue').value);
+            if(isNaN(val)) { alert("Vui lòng nhập số hợp lệ để chèn!"); return; }
+            resetPlayer(); currentAlgorithm = 'Insert'; currentCost = 0;
+            recordState(0, `Chuẩn bị chèn giá trị ${val}`);
+
+            if (!root) {
+                root = new Node(val);
+                recordState(0, "Cây rỗng, tạo Root mới.", root.id);
+            } else {
+                let curr = root;
+                while (curr) {
+                    currentCost++; // BỘ ĐẾM SỐ LẦN SO SÁNH
+                    recordState(1, `Đang xét Node ${curr.val}`, curr.id);
+                    if (val < curr.val) {
+                        recordState(2, `${val} < ${curr.val}, rẽ nhánh trái.`, curr.id);
+                        if (!curr.left) { curr.left = new Node(val); recordState(4, `Nhánh trái trống, chèn ${val}.`, curr.left.id, curr.left.id); break; } 
+                        else curr = curr.left;
+                    } else if (val > curr.val) {
+                        recordState(3, `${val} > ${curr.val}, rẽ nhánh phải.`, curr.id);
+                        if (!curr.right) { curr.right = new Node(val); recordState(4, `Nhánh phải trống, chèn ${val}.`, curr.right.id, curr.right.id); break; } 
+                        else curr = curr.right;
+                    } else {
+                        recordState(5, `Giá trị ${val} đã tồn tại trong cây, bỏ qua!`, curr.id); break;
+                    }
+                }
+            }
+            recordState(-1, `Hoàn tất thao tác.`);
+            startPlayback();
+        }
+
+        // Hàm tìm kiếm node trong BST
+        function searchNode() {
+            let val = parseInt(document.getElementById('nodeValue').value);
+            if(isNaN(val)) { alert("Vui lòng nhập giá trị cần tìm!"); return; }
+            resetPlayer(); currentAlgorithm = 'Search'; currentCost = 0;
+            recordState(0, `Tìm kiếm giá trị ${val}`);
+            
+            let curr = root; let found = false;
+            while(curr) {
+                currentCost++; // BỘ ĐẾM SO SÁNH
+                recordState(1, `Đang kiểm tra Node ${curr.val}`, curr.id);
+                if(curr.val === val) { recordState(1, `Đã tìm thấy ${val}!`, null, curr.id); found = true; break; }
+                else if (val < curr.val) { recordState(2, `${val} < ${curr.val}, rẽ nhánh trái.`); curr = curr.left; }
+                else { recordState(3, `${val} > ${curr.val}, rẽ nhánh phải.`); curr = curr.right; }
+            }
+            if(!found) recordState(4, "Không tìm thấy giá trị trong cây.");
+            startPlayback();
+        }
+
+        // Hàm xóa node khỏi BST
+        function deleteNode() {
+            let val = parseInt(document.getElementById('nodeValue').value);
+            if(isNaN(val)) { alert("Vui lòng nhập giá trị cần xóa!"); return; }
+            resetPlayer(); currentAlgorithm = 'Delete'; currentCost = 0;
+            recordState(0, `Bắt đầu tìm Node ${val} để xóa.`);
+
+            function deleteRec(node, key) {
+                if(!node) { recordState(0, `Không tìm thấy giá trị ${key} trong cây.`); return null; }
+                
+                currentCost++; // ĐẾM SỐ LẦN ĐẾN NODE ĐỂ XỬ LÝ
+                recordState(0, `Đang kiểm tra Node ${node.val}...`, node.id);
+
+                if(key < node.val) { node.left = deleteRec(node.left, key); } 
+                else if(key > node.val) { node.right = deleteRec(node.right, key); } 
+                else {
+                    // Tìm thấy node cần xóa, xử lý 3 trường hợp:
+                    recordState(0, `Đã tìm thấy Node ${key}!`, node.id);
+                    // TH1 & TH2: Node có 1 con hoặc là node lá
+                    if(!node.left) { recordState(1, `Node ${key} không có nhánh trái, lấy nhánh phải thay thế.`, null, null, node.id); return node.right; } 
+                    else if(!node.right) { recordState(2, `Node ${key} không có nhánh phải, lấy nhánh trái thay thế.`, null, null, node.id); return node.left; }
+
+                    // TH3: Node có 2 con - Tìm node thay thế (In-order Successor)
+                    recordState(3, `Node ${key} có 2 con. Tìm Node nhỏ nhất ở nhánh phải...`, node.id);
+                    let minRight = node.right;
+                    while(minRight.left) { 
+                        currentCost++; // ĐẾM CẢ LÚC TÌM NODE THẾ MẠNG
+                        minRight = minRight.left; 
+                    }
+                    recordState(4, `Xác định Node thế mạng là ${minRight.val}.`, node.id, minRight.id);
+                    // Sao chép giá trị và thực hiện xóa node thay thế ở vị trí cũ của nó
+                    node.val = minRight.val;
+                    recordState(5, `Sao chép giá trị ${minRight.val} đè lên Node cần xóa.`, node.id);
+                    recordState(6, `Tiến hành xóa Node thế mạng (${minRight.val}) ở nhánh dưới.`, node.id);
+                    node.right = deleteRec(node.right, minRight.val);
+                }
+                return node;
+            }
+            root = deleteRec(root, val);
+            recordState(7, `Đã hoàn tất thao tác xóa Node ${val}.`);
+            startPlayback();
+        }
+
+        // Hàm duyệt cây BST theo các thứ tự khác nhau
+        function traverseBST(type) {
+            if(!root) { alert("Cây đang trống!"); return; }
+            resetPlayer(); currentCost = 0;
+            let algoName = type === 'preorder' ? 'Preorder' : (type === 'inorder' ? 'Inorder' : 'Postorder');
+            currentAlgorithm = algoName;
+            recordState(0, `Bắt đầu duyệt toàn bộ cây theo ${algoName}...`);
+
+            let result = [];
+            function helper(node) {
+                if(!node) { recordState(1, "Đến cuối nhánh (NULL), quay lui."); return; }
+                currentCost++; // BỘ ĐẾM DUYỆT NODE
+                if(type === 'preorder') {
+                    recordState(2, `Xử lý Node ${node.val}`, node.id); result.push(node.val);
+                    recordState(3, `Duyệt đệ quy sang trái của ${node.val}`); helper(node.left);
+                    recordState(4, `Duyệt đệ quy sang phải của ${node.val}`); helper(node.right);
+                } else if(type === 'inorder') {
+                    recordState(2, `Duyệt đệ quy sang trái của ${node.val}`); helper(node.left);
+                    recordState(3, `Xử lý Node ${node.val}`, node.id); result.push(node.val);
+                    recordState(4, `Duyệt đệ quy sang phải của ${node.val}`); helper(node.right);
+                } else if(type === 'postorder') {
+                    recordState(2, `Duyệt đệ quy sang trái của ${node.val}`); helper(node.left);
+                    recordState(3, `Duyệt đệ quy sang phải của ${node.val}`); helper(node.right);
+                    recordState(4, `Xử lý Node ${node.val}`, node.id); result.push(node.val);
+                }
+            }
+            helper(root);
+            recordState(-1, `Duyệt xong! Kết quả: ${result.join(' → ')}`);
+            startPlayback();
+        }
+
+        // Hàm chuyển đổi theme sáng/tối và lưu vào localStorage
+        function toggleTheme() { 
+            document.body.classList.toggle('dark-mode'); 
+            let isDark = document.body.classList.contains('dark-mode');
+            document.getElementById('themeIcon').innerText = isDark ? 'light_mode' : 'dark_mode'; 
+            
+            // Thêm dòng này để LƯU trạng thái vào bộ nhớ
+            localStorage.setItem('myTheme', isDark ? 'dark' : 'light');
+        }
+
+        // Sự kiện load trang - Khởi tạo và xử lý mission nếu có
+        window.addEventListener('load', () => {
+            // CHỖ SỬA 2: Đọc bộ nhớ để đổi icon cho đúng khi load trang
+            if (localStorage.getItem('myTheme') === 'dark') {
+                document.getElementById('themeIcon').innerText = 'light_mode';
+            }
+
+            resetTree(); 
+            const visualArea = document.getElementById('visualArea');
+            if(visualArea) { visualArea.scrollLeft = (3000 - visualArea.clientWidth) / 2; }
+
+            const urlParams = new URLSearchParams(window.location.search);
+            let mission = urlParams.get('mission'); 
+            if (mission) {
+                let targetText = "";
+                if(mission === 'bst_1') targetText = "Cây cơ bản (Gồm 1 Gốc và 2 nhánh con)";
+                else if(mission === 'bst_2') targetText = "Cây suy biến thành Line (5 Node)";
+                else if(mission === 'bst_3') targetText = "Cây nhị phân hoàn hảo (7 Node, Cao 3)";
+
+                const missionPanel = document.createElement('div'); 
+                missionPanel.className = 'mission-panel';
+                missionPanel.style.cssText = "position:fixed; bottom:20px; right:20px; background:var(--bg-panel); padding:15px; border-radius:10px; box-shadow:0 10px 25px rgba(0,0,0,0.15); border-left:4px solid #f39c12; width:260px; font-size:14px; z-index:9999; color:var(--text-main); transition:0.3s;";
+                
+                missionPanel.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:8px; font-weight:bold; margin-bottom:10px; color:#f39c12; font-size:16px;">
+                        <span class="material-symbols-outlined">flag</span> Đang thực thi
+                    </div>
+                    <div style="color:var(--text-main); margin-bottom:15px; line-height:1.4;">
+                        Mục tiêu: <b>${targetText}</b>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button onclick="checkMissionBST('${mission}')" style="flex:1; background:#f39c12; color:white; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:5px; transition:0.2s;"><span class="material-symbols-outlined" style="font-size:16px;">check_circle</span> Chấm điểm</button>
+                        <button onclick="window.location.href='quiz.html?mode=chienbinh'" style="background:transparent; border:1px solid #bdc3c7; color:#7f8c8d; padding:8px 12px; border-radius:6px; cursor:pointer; transition:0.2s; display:flex; align-items:center;" title="Thoát nhiệm vụ"><span class="material-symbols-outlined" style="font-size:16px;">logout</span></button>
+                    </div>
+                `;
+                document.body.appendChild(missionPanel);
+            }
+        });
+
+        // Hàm kiểm tra mission cho BST
+        function checkMissionBST(task) {
+            let c = document.querySelectorAll('.tree-node').length;
+            let yPositions = new Set();
+            document.querySelectorAll('.tree-node').forEach(n => yPositions.add(n.style.top));
+            let h = yPositions.size;
+            
+            if (task === 'bst_1') {
+                if (c >= 3 && h >= 2) alert("🎉 TUYỆT VỜI! Bạn đã tạo được cây cơ bản.");
+                else alert(`❌ Chưa đạt.\nCây hiện tại có: ${c} Node, Cao: ${h}\n(Yêu cầu: Ít nhất 3 Node, Cao 2)`);
+            } else if (task === 'bst_2') {
+                if (c === 5 && h === 5) alert("🎉 XUẤT SẮC! Cây của bạn đã bị suy biến hoàn toàn.");
+                else alert(`❌ Chưa chính xác.\nCây hiện tại có: ${c} Node, Cao: ${h}\n(Yêu cầu: 5 Node, Cao 5)`);
+            } else if (task === 'bst_3') {
+                if (c === 7 && h === 3) alert("🎉 TUYỆT VỜI! Một cây nhị phân hoàn hảo.");
+                else alert(`❌ Chưa đúng.\nCây hiện tại có: ${c} Node, Cao: ${h}\n(Yêu cầu: 7 Node, Cao 3)`);
+            }
+        }
+    </script>
+</body>
+</html>

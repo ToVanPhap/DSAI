@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DSA Visualizer - Linked List</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Phần style tùy chỉnh cho các node, mũi tên và các thành phần giao diện -->
+    <style>
+        /* Tăng thời gian transition lên 0.5s để hiệu ứng mượt và chậm hơn */
+        .node { position: absolute; width: 46px; height: 46px; background-color: #3498db; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: all 0.5s ease; top: 100px; z-index: 2; }
+        .node.highlight { background-color: #e67e22; transform: scale(1.15); box-shadow: 0 0 15px #e67e22; }
+        .node.found { background-color: #2ecc71; transform: scale(1.2); box-shadow: 0 0 15px #2ecc71; }
+        .node.deleting { background-color: #e74c3c; transform: scale(0); opacity: 0; }
+        .arrow { position: absolute; height: 4px; background-color: #7f8c8d; top: 121px; z-index: 1; transition: all 0.5s ease; }
+        .arrow::after { content: ''; position: absolute; right: -2px; top: -6px; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 12px solid #7f8c8d; }
+        
+        .player-panel { justify-content: center; min-width: 200px; }
+        .mission-panel { position: fixed; bottom: 20px; right: 20px; background: var(--bg-panel); color: var(--text-main); padding: 15px; border-radius: 10px; box-shadow: 0 0 15px rgba(0,0,0,0.2); z-index: 1000; border-left: 5px solid #3498db; width: 250px; }
+    </style>
+</head>
+<body>
+    <!-- Script kiểm tra và áp dụng theme từ localStorage khi trang load -->
+    <script>
+        if (localStorage.getItem('myTheme') === 'dark') {
+            document.body.classList.add('dark-mode');
+        }
+    </script>
+
+    <!-- Thanh điều hướng với các liên kết đến các trang khác -->
+    <div class="navbar">
+        <a href="index.html" class="nav-active"><span class="material-symbols-outlined">linear_scale</span> Danh Sách Liên Kết</a>
+        <a href="bst.html" class="nav-inactive"><span class="material-symbols-outlined">account_tree</span> Cây Nhị Phân (BST)</a>
+        <a href="quiz.html" class="nav-inactive"><span class="material-symbols-outlined">quiz</span> Thử thách </a>
+        <button class="btn-theme" onclick="toggleTheme()"><span class="material-symbols-outlined" id="themeIcon">dark_mode</span></button>
+    </div>
+
+    <!-- Tiêu đề chính của trang -->
+    <h1><span class="material-symbols-outlined" style="font-size: 28px; color: #2980b9;">school</span> Danh Sách Liên Kết Đơn</h1>
+    
+    <!-- Khu vực điều khiển chính với các panel cho các thao tác thêm/xóa node -->
+    <div class="controls-wrapper">
+        <!-- Panel thêm node vào đầu hoặc cuối danh sách -->
+        <div class="control-panel">
+            <span class="panel-title">Node X:</span>
+            <input type="number" id="nodeValue" value="">
+            <button class="btn-add" onclick="addHead()"><span class="material-symbols-outlined">first_page</span> AddHead</button>
+            <button class="btn-add" onclick="addTail()"><span class="material-symbols-outlined">last_page</span> AddTail</button>
+        </div>
+
+        <!-- Panel đặc biệt cho việc chèn node sau một node cụ thể -->
+        <div class="control-panel" style="border: 2px solid #3498db; background-color: #ebf5fb;">
+            <span class="panel-title" style="color: #2980b9;">Chèn X sau Q:</span>
+            <input type="number" id="nodeQ" value="">
+            <button class="btn-add" style="background-color: #2980b9;" onclick="addAfterQ()"><span class="material-symbols-outlined">insert_page_break</span> AddAfterQ</button>
+        </div>
+
+        <!-- Panel cho các thao tác xóa, duyệt và quản lý danh sách -->
+        <div class="control-panel">
+            <button class="btn-del" onclick="deleteHead()"><span class="material-symbols-outlined">delete</span> DelHead</button>
+            <button class="btn-trav" onclick="traverse()"><span class="material-symbols-outlined">visibility</span> Duyệt</button>
+            <button class="btn-random" onclick="randomizeList()"><span class="material-symbols-outlined">shuffle</span> Random</button>
+            <button class="btn-reset" onclick="resetList()"><span class="material-symbols-outlined">refresh</span> Làm trống</button>
+        </div>
+
+        <!-- Panel điều khiển trình phát để xem từng bước thực hiện -->
+        <div class="player-panel">
+            <button class="player-btn" onclick="prevStep()" title="Lùi 1 bước"><span class="material-symbols-outlined">skip_previous</span></button>
+            <button class="player-btn" id="playBtn" onclick="togglePlay()" title="Phát/Tạm dừng"><span class="material-symbols-outlined" id="playIcon">play_arrow</span></button>
+            <button class="player-btn" onclick="nextStep()" title="Tiến 1 bước"><span class="material-symbols-outlined">skip_next</span></button>
+            <span id="stepCounterDisplay" style="margin-left: 10px; min-width: 40px;">0/0</span>
+        </div>
+
+        <!-- Thanh trượt điều chỉnh tốc độ phát -->
+        <div class="control-panel slider-container">
+            <span class="material-symbols-outlined">speed</span>
+            <input type="range" id="speedRange" min="0.25" max="3" step="0.25" value="1" oninput="changeSpeed()">
+            <span id="speedLabel" style="color: #e74c3c; font-weight: bold; width: 35px;">x1</span>
+        </div>
+    </div>
+
+    <!-- Thanh trạng thái hiển thị thông tin và chi phí Big O -->
+    <div class="dashboard-strip">
+        <div class="status-text">
+            <span class="material-symbols-outlined">psychology</span>
+            <span id="aiStatus">Hệ thống Danh sách liên kết sẵn sàng.</span>
+        </div>
+        <div class="big-o-tracker" style="color: #f7f5f5; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: bold;">
+            <span class="material-symbols-outlined" style="font-size: 20px;">analytics</span>
+            <span id="costDisplay">Duyệt: 0 Node | Hiệu suất: O(1)</span>
+        </div>
+    </div>
+
+    <!-- Khu vực chính chứa phần hiển thị trực quan và mã giả thuật -->
+    <div class="container">
+        <!-- Khu vực hiển thị trực quan danh sách liên kết -->
+        <div class="visual-area" id="visualArea"></div>
+        <!-- Khu vực hiển thị mã giả thuật và nút xem code -->
+        <div class="code-area" id="codeArea">
+            <h3 class="code-title">
+                <span class="material-symbols-outlined">code</span> Mã giả thuật toán
+                <button class="btn-export" style="background:#34495e; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; float:right;" onclick="openCodeModal()">
+                    <span class="material-symbols-outlined" style="font-size:16px; vertical-align:middle;">integration_instructions</span> Xem Code
+                </button>
+            </h3>
+            <div id="pseudoContent">Bấm một nút chức năng để xem mã giả...</div>
+        </div>
+    </div>
+
+    <!-- Modal hiển thị code minh họa trong các ngôn ngữ khác nhau -->
+    <div class="modal-overlay" id="codeModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center;">
+        <div class="modal-content" style="background:var(--bg-panel); width:600px; max-width:90%; border-radius:8px; overflow:hidden;">
+            <div class="modal-header" style="padding:15px; background:#21252b; display:flex; justify-content:space-between; align-items:center;">
+                <div class="modal-title" style="color:#61afef; font-weight:bold;"><span class="material-symbols-outlined" style="vertical-align:middle;">terminal</span> Code minh họa</div>
+                <span class="material-symbols-outlined modal-close" style="color:#abb2bf; cursor:pointer;" onclick="closeCodeModal()">close</span>
+            </div>
+            <!-- Tabs để chuyển đổi giữa các ngôn ngữ lập trình -->
+            <div class="modal-tabs" style="background:#21252b; display:flex;">
+                <button class="tab-btn active" onclick="switchTab('cpp')" style="padding:10px 20px; background:transparent; border:none; color:#abb2bf; cursor:pointer; border-bottom:2px solid transparent;">C++</button>
+                <button class="tab-btn" onclick="switchTab('python')" style="padding:10px 20px; background:transparent; border:none; color:#abb2bf; cursor:pointer; border-bottom:2px solid transparent;">Python</button>
+                <button class="tab-btn" onclick="switchTab('java')" style="padding:10px 20px; background:transparent; border:none; color:#abb2bf; cursor:pointer; border-bottom:2px solid transparent;">Java</button>
+            </div>
+            <!-- Nội dung code với nút copy -->
+            <div class="modal-body" style="padding:15px; position:relative; background:#282c34;">
+                <button class="btn-copy" onclick="copyCode()" style="position:absolute; top:10px; right:10px; background:#3e4451; color:#abb2bf; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Copy</button>
+                <pre style="margin:0; overflow-x:auto;"><code id="sourceCodeBlock" style="color:#e06c75; font-family:monospace; white-space:pre-wrap;">// Vui lòng chạy một chức năng (AddHead, AddTail...) để xem code tương ứng.</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // MÃ GIẢ - Định nghĩa các bước thuật toán cho từng chức năng
+        const PSEUDOCODE = {
+            'AddHead': ["1. Tạo Node P chứa giá trị X.", "2. Nếu ds rỗng (Head == NULL):", "3.     Head = P", "4. Ngược lại:", "5.     P.next = Head", "6.     Head = P"],
+            'AddTail': ["1. Tạo Node P chứa giá trị X.", "2. Nếu ds rỗng: Head = P.", "3. Node temp = Head", "4. Lặp tìm Node cuối (temp.next != NULL):", "5.     temp = temp.next", "6. temp.next = P"],
+            'AddAfterQ': ["1. Node temp = Head", "2. Lặp tìm Node có giá trị Q", "3.     temp = temp.next", "4. Nếu không tìm thấy: Bỏ qua", "5. Tạo Node P chứa giá trị X.", "6. P.next = temp.next", "7. temp.next = P"],
+            'DeleteHead': ["1. Nếu danh sách rỗng: Trả về.", "2. Node temp = Head", "3. Head = Head.next", "4. Xóa (Giải phóng) temp"],
+            'Traverse': ["1. Node temp = Head", "2. Lặp khi (temp != NULL):", "3.     Xử lý (temp.val)", "4.     temp = temp.next"]
+        };
+
+        // CODE MINH HỌA - Mã nguồn thực tế trong C++, Python, Java cho từng chức năng
+        const SOURCE_CODE = {
+            'AddHead': {
+                'cpp': `void addHead(Node*& head, int val) {\n    Node* p = new Node(val);\n    if (head == NULL) {\n        head = p;\n    } else {\n        p->next = head;\n        head = p;\n    }\n}`,
+                'python': `def add_head(self, val):\n    p = Node(val)\n    if self.head is None:\n        self.head = p\n    else:\n        p.next = self.head\n        self.head = p`,
+                'java': `public void addHead(int val) {\n    Node p = new Node(val);\n    if (head == null) {\n        head = p;\n    } else {\n        p.next = head;\n        head = p;\n    }\n}`
+            },
+            'AddTail': {
+                'cpp': `void addTail(Node*& head, int val) {\n    Node* p = new Node(val);\n    if (head == NULL) {\n        head = p;\n        return;\n    }\n    Node* temp = head;\n    while (temp->next != NULL) {\n        temp = temp->next;\n    }\n    temp->next = p;\n}`,
+                'python': `def add_tail(self, val):\n    p = Node(val)\n    if self.head is None:\n        self.head = p\n        return\n    temp = self.head\n    while temp.next is not None:\n        temp = temp.next\n    temp.next = p`,
+                'java': `public void addTail(int val) {\n    Node p = new Node(val);\n    if (head == null) {\n        head = p;\n        return;\n    }\n    Node temp = head;\n    while (temp.next != null) {\n        temp = temp.next;\n    }\n    temp.next = p;\n}`
+            },
+            'AddAfterQ': {
+                'cpp': `void addAfterQ(Node* head, int x, int q) {\n    Node* temp = head;\n    while (temp != NULL && temp->val != q) {\n        temp = temp->next;\n    }\n    if (temp != NULL) {\n        Node* p = new Node(x);\n        p->next = temp->next;\n        temp->next = p;\n    }\n}`,
+                'python': `def add_after_q(self, x, q):\n    temp = self.head\n    while temp is not None and temp.val != q:\n        temp = temp.next\n    if temp is not None:\n        p = Node(x)\n        p.next = temp.next\n        temp.next = p`,
+                'java': `public void addAfterQ(int x, int q) {\n    Node temp = head;\n    while (temp != null && temp.val != q) {\n        temp = temp.next;\n    }\n    if (temp != null) {\n        Node p = new Node(x);\n        p.next = temp.next;\n        temp.next = p;\n    }\n}`
+            },
+            'DeleteHead': {
+                'cpp': `void deleteHead(Node*& head) {\n    if (head == NULL) return;\n    Node* temp = head;\n    head = head->next;\n    delete temp;\n}`,
+                'python': `def delete_head(self):\n    if self.head is None:\n        return\n    temp = self.head\n    self.head = self.head.next\n    del temp`,
+                'java': `public void deleteHead() {\n    if (head == null) return;\n    Node temp = head;\n    head = head.next;\n    // Garbage collector tự lo việc xóa\n}`
+            },
+            'Traverse': {
+                'cpp': `void traverse(Node* head) {\n    Node* temp = head;\n    while (temp != NULL) {\n        cout << temp->val << " ";\n        temp = temp->next;\n    }\n}`,
+                'python': `def traverse(self):\n    temp = self.head\n    while temp is not None:\n        print(temp.val, end=" ")\n        temp = temp.next`,
+                'java': `public void traverse() {\n    Node temp = head;\n    while (temp != null) {\n        System.out.print(temp.val + " ");\n        temp = temp.next;\n    }\n}`
+            }
+        };
+
+        // CORE DATA - Dữ liệu cốt lõi của ứng dụng
+        let linkedList = [];
+        let currentAlgorithm = 'Base';
+        let currentLang = 'cpp'; // Ngôn ngữ mặc định của Modal
+        
+        let currentCost = 0; // BIẾN LƯU CHI PHÍ ĐỂ LÀM TÍNH NĂNG BIG O
+
+        // PLAYER STATE - Trạng thái của trình phát để điều khiển animation
+        let historyQueue = [];
+        let currentIndex = 0;
+        let playTimer = null;
+        let isPlaying = false;
+
+        // --- HỆ THỐNG MODAL CODE - Các hàm quản lý modal hiển thị code ---
+        function openCodeModal() { document.getElementById('codeModal').style.display = 'flex'; updateCodeBlock(); }
+        function closeCodeModal() { document.getElementById('codeModal').style.display = 'none'; }
+        function switchTab(lang) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.style.borderBottom = '2px solid transparent');
+            event.target.style.borderBottom = '2px solid #61afef'; // Highlight tab đang chọn
+            currentLang = lang; updateCodeBlock();
+        }
+        function updateCodeBlock() {
+            if(SOURCE_CODE[currentAlgorithm] && SOURCE_CODE[currentAlgorithm][currentLang]) {
+                document.getElementById('sourceCodeBlock').innerText = SOURCE_CODE[currentAlgorithm][currentLang];
+            } else {
+                document.getElementById('sourceCodeBlock').innerText = "// Vui lòng chạy một chức năng (AddHead, AddTail...) để xem code.";
+            }
+        }
+        function copyCode() { navigator.clipboard.writeText(document.getElementById('sourceCodeBlock').innerText); alert("Đã copy mã nguồn thành công!"); }
+
+        // --- CÁC HÀM CORE DÀNH CHO TRÌNH PHÁT (PLAYER) - Điều khiển animation từng bước ---
+        function pushState(arraySnap, pseudoIdx, statusMsg) {
+            // Sử dụng deep clone (JSON) để lưu trữ dữ liệu mảng tại thời điểm đó, tránh bị thay đổi bởi tham chiếu sau này
+            historyQueue.push({
+                data: JSON.parse(JSON.stringify(arraySnap)),
+                pseudo: pseudoIdx,
+                status: statusMsg,
+                cost: currentCost // Lưu trữ chi phí vào state
+            });
+        }
+
+        function changeSpeed() {
+            document.getElementById('speedLabel').innerText = 'x' + document.getElementById('speedRange').value;
+            if(isPlaying) { togglePlay(); togglePlay(); }
+        }
+
+        function resetPlayer() {
+            clearInterval(playTimer); isPlaying = false; historyQueue = []; currentIndex = 0;
+            document.getElementById('playIcon').innerText = 'play_arrow';
+            document.getElementById('stepCounterDisplay').innerText = `0/0`;
+        }
+
+        function startPlayback() {
+            if(historyQueue.length === 0) return;
+            currentIndex = 0; renderStep(0); togglePlay();
+        }
+
+        function togglePlay() {
+            if (isPlaying) {
+                clearInterval(playTimer); isPlaying = false;
+                document.getElementById('playIcon').innerText = 'play_arrow';
+            } else {
+                if(historyQueue.length === 0) return;
+                if(currentIndex >= historyQueue.length - 1) currentIndex = 0;
+                isPlaying = true;
+                document.getElementById('playIcon').innerText = 'pause';
+                let speed = parseFloat(document.getElementById('speedRange').value);
+                
+                playTimer = setInterval(() => {
+                    if (currentIndex < historyQueue.length - 1) { currentIndex++; renderStep(currentIndex); } 
+                    else { togglePlay(); }
+                }, 1500 / speed);
+            }
+        }
+        function nextStep() { pause(); if(currentIndex < historyQueue.length - 1) renderStep(++currentIndex); }
+        function prevStep() { pause(); if(currentIndex > 0) renderStep(--currentIndex); }
+        function pause() { if(isPlaying) togglePlay(); }
+
+        // --- RENDER ENGINE - Hệ thống vẽ trực quan danh sách liên kết ---
+        function renderStep(index) {
+            if(!historyQueue[index]) return;
+            const state = historyQueue[index];
+            document.getElementById('stepCounterDisplay').innerText = `${index + 1}/${historyQueue.length}`;
+            document.getElementById('aiStatus').innerText = state.status;
+
+            // XỬ LÝ TEXT HIỂN THỊ CHI PHÍ BIG O THEO TỪNG THUẬT TOÁN CŨ
+            let costText = `Duyệt: ${state.cost || 0} Node | Hiệu suất: O(n)`;
+            if (currentAlgorithm === 'AddHead' || currentAlgorithm === 'DeleteHead' || currentAlgorithm === 'Base') {
+                costText = `Duyệt: ${state.cost || 0} Node | Hiệu suất: O(1)`;
+            }
+            if (document.getElementById('costDisplay')) document.getElementById('costDisplay').innerText = costText;
+
+            let html = '';
+            if(PSEUDOCODE[currentAlgorithm]) {
+                PSEUDOCODE[currentAlgorithm].forEach((line, i) => {
+                    html += `<div class="code-line ${i === state.pseudo ? 'active' : ''}">${line}</div>`;
+                });
+            }
+            document.getElementById('pseudoContent').innerHTML = html;
+
+            const visualArea = document.getElementById('visualArea');
+            visualArea.innerHTML = '';
+            
+            const startX = 30, gap = 110;
+            state.data.forEach((node, i) => {
+                const el = document.createElement('div');
+                el.className = `node ${node.isHighlight ? 'highlight' : ''} ${node.isFound ? 'found' : ''} ${node.isDeleting ? 'deleting' : ''}`;
+                el.innerText = node.value;
+                el.style.left = `${startX + i * gap}px`;
+                visualArea.appendChild(el);
+
+                if (i < state.data.length - 1) {
+                    const arrow = document.createElement('div');
+                    arrow.className = 'arrow';
+                    arrow.style.left = `${startX + i * gap + 46}px`;
+                    arrow.style.width = `${gap - 46}px`;
+                    visualArea.appendChild(arrow);
+                }
+            });
+        }
+
+        // --- CÁC HÀM THUẬT TOÁN (GỐC) + BỔ SUNG ĐẾM CHI PHÍ - Triển khai các thao tác trên danh sách ---
+        // Hàm thêm node vào đầu danh sách
+        function addHead() {
+            let val = document.getElementById('nodeValue').value;
+            if(val === '') { alert("Vui lòng nhập giá trị X!"); return; }
+            resetPlayer(); currentAlgorithm = 'AddHead'; currentCost = 1;
+
+            // Sao chép danh sách hiện tại để xử lý mô phỏng
+            let tempArray = JSON.parse(JSON.stringify(linkedList));
+            pushState(tempArray, 0, `Tạo Node P mang giá trị ${val}`);
+            
+            const newNode = { id: Date.now(), value: val, isHighlight: false, isFound: false, isDeleting: false };
+            
+            if(tempArray.length === 0) {
+                newNode.isHighlight = true;
+                tempArray.push(newNode);
+                pushState(tempArray, 2, "Danh sách rỗng, chèn thẳng vào Head.");
+                tempArray[0].isHighlight = false;
+            } else {
+                newNode.isHighlight = true;
+                tempArray.unshift(newNode);
+                pushState(tempArray, 4, "Danh sách không rỗng, chèn P lên trước Head hiện tại.");
+                tempArray[0].isHighlight = false;
+            }
+            
+            pushState(tempArray, -1, "Hoàn tất AddHead.");
+            linkedList = tempArray;
+            startPlayback();
+        }
+
+        // Hàm thêm node vào cuối danh sách
+        function addTail() {
+            let val = document.getElementById('nodeValue').value;
+            if(val === '') { alert("Vui lòng nhập giá trị X!"); return; }
+            resetPlayer(); currentAlgorithm = 'AddTail'; currentCost = 0;
+
+            let tempArray = JSON.parse(JSON.stringify(linkedList));
+            pushState(tempArray, 0, `Tạo Node P mang giá trị ${val}`);
+            
+            const newNode = { id: Date.now(), value: val, isHighlight: false, isFound: false, isDeleting: false };
+            
+            if(tempArray.length === 0) {
+                currentCost++;
+                newNode.isHighlight = true;
+                tempArray.push(newNode);
+                pushState(tempArray, 1, "Danh sách rỗng, chèn làm phần tử đầu tiên.");
+                tempArray[0].isHighlight = false;
+            } else {
+                pushState(tempArray, 2, "Bắt đầu duyệt từ Head tìm Node cuối...");
+                for(let i=0; i<tempArray.length; i++) {
+                    currentCost++;
+                    tempArray[i].isHighlight = true;
+                    pushState(tempArray, 3, `Đang duyệt Node ${tempArray[i].value}`);
+                    tempArray[i].isHighlight = false;
+                }
+                newNode.isHighlight = true;
+                tempArray.push(newNode);
+                pushState(tempArray, 5, "Đã tìm thấy Node cuối, gán temp.next = P.");
+                tempArray[tempArray.length-1].isHighlight = false;
+            }
+            
+            pushState(tempArray, -1, "Hoàn tất chèn vào cuối danh sách.");
+            linkedList = tempArray;
+            startPlayback();
+        }
+
+        // Hàm thêm node sau node có giá trị Q
+        function addAfterQ() {
+            let xVal = document.getElementById('nodeValue').value;
+            let qVal = document.getElementById('nodeQ').value;
+            if(xVal === '' || qVal === '') { alert("Vui lòng nhập đủ giá trị X và Q!"); return; }
+            resetPlayer(); currentAlgorithm = 'AddAfterQ'; currentCost = 0;
+
+            let tempArray = JSON.parse(JSON.stringify(linkedList));
+            let foundIdx = -1;
+            
+            pushState(tempArray, 0, `Bắt đầu duyệt tìm Node Q = ${qVal}`);
+            
+            for(let i=0; i<tempArray.length; i++) {
+                currentCost++;
+                tempArray[i].isHighlight = true;
+                pushState(tempArray, 2, `Đang kiểm tra Node ${tempArray[i].value}...`);
+                if(tempArray[i].value == qVal) { // == để so sánh chuỗi và số
+                    tempArray[i].isFound = true;
+                    tempArray[i].isHighlight = false;
+                    pushState(tempArray, -1, `Đã tìm thấy Node Q!`);
+                    foundIdx = i;
+                    break;
+                }
+                tempArray[i].isHighlight = false;
+            }
+            
+            if(foundIdx === -1) {
+                pushState(tempArray, 3, "Không tìm thấy Node Q, bỏ qua thao tác.");
+            } else {
+                const newNode = { id: Date.now(), value: xVal, isHighlight: true, isFound: false, isDeleting: false };
+                // Sử dụng splice để chèn vào vị trí chỉ định trong mảng mô phỏng
+                tempArray.splice(foundIdx + 1, 0, newNode);
+                pushState(tempArray, 4, `Chèn Node mới ${xVal} vào sau Node Q`);
+                tempArray[foundIdx].isFound = false;
+                tempArray[foundIdx+1].isHighlight = false;
+            }
+            
+            pushState(tempArray, -1, "Hoàn tất AddAfterQ.");
+            linkedList = tempArray;
+            startPlayback();
+        }
+
+        // Hàm xóa node đầu danh sách
+        function deleteHead() {
+            if(linkedList.length === 0) { alert("Danh sách đang rỗng!"); return; }
+            resetPlayer(); currentAlgorithm = 'DeleteHead'; currentCost = 1;
+
+            let tempArray = JSON.parse(JSON.stringify(linkedList));
+            pushState(tempArray, 1, "Gán con trỏ temp vào Head.");
+            
+            tempArray[0].isDeleting = true;
+            pushState(tempArray, 2, "Chuyển Head sang Node tiếp theo (Head = Head.next).");
+            
+            tempArray.shift(); // Xóa phần tử đầu mảng
+            pushState(tempArray, 3, "Đã xóa (giải phóng) Head cũ thành công.");
+            
+            linkedList = tempArray;
+            startPlayback();
+        }
+
+        // Hàm duyệt qua toàn bộ danh sách
+        function traverse() {
+            resetPlayer(); currentAlgorithm = 'Traverse'; currentCost = 0;
+            let tempArray = JSON.parse(JSON.stringify(linkedList));
+            if(tempArray.length === 0) {
+                pushState(tempArray, 0, "Danh sách rỗng.");
+                startPlayback(); return;
+            }
+            
+            pushState(tempArray, 0, "Bắt đầu duyệt từ Head.");
+            for(let i=0; i<tempArray.length; i++) {
+                currentCost++;
+                tempArray[i].isHighlight = true;
+                pushState(tempArray, 2, `Đang xử lý Node mang giá trị: ${tempArray[i].value}`);
+                tempArray[i].isHighlight = false;
+                if(i < tempArray.length - 1) pushState(tempArray, 3, `Chuyển con trỏ sang Node tiếp theo (temp = temp.next)`);
+            }
+            pushState(tempArray, -1, "Đã duyệt xong toàn bộ danh sách.");
+            startPlayback();
+        }
+
+        // Hàm tạo danh sách mẫu ngẫu nhiên
+        function randomizeList() {
+            resetPlayer(); linkedList = []; currentCost = 0; currentAlgorithm = 'Base';
+            [10, 20, 30, 40, 50].forEach(v => linkedList.push({ id: Date.now() + Math.random(), value: v, isHighlight: false, isFound: false, isDeleting: false }));
+            pushState(linkedList, -1, `Đã khởi tạo danh sách mẫu`); renderStep(0);
+        }
+
+        // Hàm làm trống danh sách
+        function resetList() {
+            resetPlayer(); linkedList = []; currentCost = 0; currentAlgorithm = 'Base';
+            pushState(linkedList, -1, `Đã làm trống danh sách`); renderStep(0);
+        }
+
+        // Hàm chuyển đổi theme sáng/tối và lưu vào localStorage
+        function toggleTheme() { 
+            document.body.classList.toggle('dark-mode'); 
+            let isDark = document.body.classList.contains('dark-mode');
+            document.getElementById('themeIcon').innerText = isDark ? 'light_mode' : 'dark_mode'; 
+            
+            // Thêm dòng này để LƯU trạng thái vào bộ nhớ
+            localStorage.setItem('myTheme', isDark ? 'dark' : 'light');
+        }
+
+        // Sự kiện load trang - Khởi tạo và xử lý mission nếu có
+        window.addEventListener('load', () => {
+            // CHỖ SỬA 2: Đọc bộ nhớ để đổi icon cho đúng khi load trang
+            if (localStorage.getItem('myTheme') === 'dark') {
+                document.getElementById('themeIcon').innerText = 'light_mode';
+            }
+
+            resetList(); 
+            const urlParams = new URLSearchParams(window.location.search);
+            let mission = urlParams.get('mission');
+            
+            if (mission) {
+                let targetText = "";
+                if(mission === 'll_1') targetText = "Tạo danh sách: 10 -> 20 -> 30";
+                else if(mission === 'll_2') targetText = "Tạo 50->40->30->20, Xóa Head -> 40->30->20";
+                else if(mission === 'll_3') targetText = "Dùng AddTail và AddAfterQ tạo: 10->20->30->40";
+
+                const missionPanel = document.createElement('div');
+                missionPanel.className = 'mission-panel';
+                missionPanel.style.cssText = "position:fixed; bottom:20px; right:20px; background:var(--bg-panel); padding:15px; border-radius:10px; box-shadow:0 10px 25px rgba(0,0,0,0.15); border-left:4px solid #f39c12; width:260px; font-size:14px; z-index:9999; color:var(--text-main); transition:0.3s;";
+                
+                missionPanel.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:8px; font-weight:bold; margin-bottom:10px; color:#f39c12; font-size:16px;">
+                        <span class="material-symbols-outlined">flag</span> Đang thực thi
+                    </div>
+                    <div style="color:var(--text-main); margin-bottom:15px; line-height:1.4;">
+                        Mục tiêu: <b>${targetText}</b>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button onclick="checkMissionLL('${mission}')" style="flex:1; background:#f39c12; color:white; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:5px; transition:0.2s;"><span class="material-symbols-outlined" style="font-size:16px;">check_circle</span> Chấm điểm</button>
+                        <button onclick="window.location.href='quiz.html?mode=chienbinh'" style="background:transparent; border:1px solid #bdc3c7; color:#7f8c8d; padding:8px 12px; border-radius:6px; cursor:pointer; transition:0.2s; display:flex; align-items:center;" title="Thoát nhiệm vụ"><span class="material-symbols-outlined" style="font-size:16px;">logout</span></button>
+                    </div>
+                `;
+                document.body.appendChild(missionPanel);
+            }
+        });
+
+        // Hàm kiểm tra mission cho Linked List
+        function checkMissionLL(task) {
+            let values = [];
+            if (typeof linkedList !== 'undefined' && linkedList.length > 0) {
+                values = linkedList.map(node => node.value.toString().trim());
+            } 
+            const currentStr = values.length ? values.join(' -> ') : "Đang trống";
+            const resultStr = values.join(',');
+
+            let passed = false; let expected = "";
+            if (task === 'll_1') { expected = "10 -> 20 -> 30"; passed = (resultStr === "10,20,30"); }
+            else if (task === 'll_2') { expected = "40 -> 30 -> 20"; passed = (resultStr === "40,30,20"); }
+            else if (task === 'll_3') { expected = "10 -> 20 -> 30 -> 40"; passed = (resultStr === "10,20,30,40"); }
+
+            if (passed) alert("🎉 CHÍNH XÁC! Bạn đã vượt qua thử thách thành công.");
+            else alert("❌ Chưa đúng.\nHiện tại: " + currentStr + "\nYêu cầu: " + expected);
+        }
+    </script>
+</body>
+</html>
